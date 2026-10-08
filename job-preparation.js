@@ -1,0 +1,20 @@
+import {profileText} from './profile-intelligence.js';
+export function jobPreparation(job, profile, resume = '') {
+  const text = profile?.confirmed ? profileText(profile) : resume;
+  const lines = text.split(/\n+/).map(s=>s.trim()).filter(s=>s.length>20);
+  const expectations = String(job.description || '').replace(/<[^>]*>/g,' ').split(/\n+|[•▪●]|(?<=[.!?])\s+/).map(s=>s.replace(/^[-\s]+/,'').trim()).filter(s=>s.length>25 && /responsib|require|experience|skill|deliver|develop|manage|lead|analyse|analyz|support|collaborat|design|ensure|knowledge|ability|must|report|stakeholder/i.test(s)).filter(s=>!/^we champion|equal opportunity|diversity|benefits|our company/i.test(s)).slice(0,7);
+  const matched=job.matched || [], gaps=job.gaps || [];
+  const evidence=matched.map(skill=>({skill,quotes:lines.filter(line=>line.toLowerCase().includes(skill.toLowerCase())).slice(0,2)}));
+  const support=(skill,pattern)=>{const hit=skill?evidence.find(e=>e.skill===skill&&e.quotes.length):null;const passage=hit?.quotes[0]||lines.find(line=>pattern?.test(line));return passage?'Resume evidence: “'+passage+'”':'No specific supporting passage was identified in the resume.';};
+  const primary=matched[0]||job.required?.[0]||'the key requirement',secondary=matched[1]||primary;
+  const answers=[
+   'For '+job.title+' at '+job.company+', my strongest relevant skills are '+(matched.slice(0,3).join(', ')||'[verified skills]')+'. '+support(primary)+' [Explain why this employer and role interest you, and connect your background to its priorities.]',
+   'Project example using '+primary+': '+support(primary)+' [State the project objective, your personal responsibilities, the steps you took with '+primary+', and the verified result.]',
+   'Applying '+secondary+' to this vacancy: '+support(secondary)+' I would clarify the requirement, agree acceptance criteria, apply '+secondary+' to the work, and validate the output with stakeholders. [Connect these steps to: '+(expectations[1]||expectations[0]||'a specific employer responsibility')+'.]',
+   gaps.length?'Preparing for '+gaps[0]+': the resume does not establish this skill. [State your actual current level.] I would build on '+primary+', study the required concepts, complete a practical exercise and validate readiness with a relevant deliverable. [Give a realistic learning timeline.]':'My likely challenge would be [specific responsibility from the vacancy]. [Describe what you need to learn, who you would consult and how you would validate your readiness.]',
+   'Resolving a delivery or requirements problem: '+support(null,/stakeholder|conflict|requirement|collaborat|delivery|uat/i)+' [Describe the actual disagreement, how you clarified needs, assessed options, agreed a decision and confirmed the outcome. Do not invent a conflict.]',
+   'My first 30 days: week 1 — understand priorities, systems and stakeholders; week 2 — validate requirements and success measures; weeks 3–4 — deliver an agreed initial improvement and review results. [Adapt this plan to '+(expectations[0]||'the actual vacancy')+' and choose a measurable outcome.]'
+  ];
+  const improvements=[...evidence.filter(e=>e.quotes.length).slice(0,3).map(e=>({title:`Highlight ${e.skill}`,detail:`Move this existing evidence higher in your relevant experience: “${e.quotes[0]}” Keep employer, dates and claims unchanged.`})),...gaps.slice(0,4).map(skill=>({title:`Address ${skill}`,detail:'This requirement was not identified in the resume. Add a specific example only if you have this experience; otherwise describe training honestly as in progress or leave it as a gap.'})),{title:'Strengthen measurable outcomes',detail:'For relevant projects, add verified scale, quality, time or business impact. No figures are inferred from your resume.'}];
+  return {expectations,evidence,answers,improvements,method:'Evidence-based local suggestions using extracted job text and your confirmed profile (or uploaded resume). No external AI model is configured; bracketed details need your input.'};
+}
