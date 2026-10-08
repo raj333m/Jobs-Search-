@@ -746,11 +746,25 @@ function initApplicationGuide(){
 }
 initApplicationGuide();
 
-// Privacy notice: permanently erase this visitor's stored data.
-if (typeof document !== 'undefined' && $('#privacy-delete')) $('#privacy-delete').addEventListener('click', () => action(async () => {
-  if ($('#privacy-delete-confirm').value.trim() !== 'DELETE') throw new Error('Type DELETE in the box to confirm erasing your data.');
-  await post('/api/career/delete', { confirm: 'DELETE' });
-  $('#privacy-delete-confirm').value = '';
-  notify('Your data has been permanently deleted from this app. The page will now reload.');
-  setTimeout(() => location.reload(), 2500);
-}));
+// Privacy notice dialog: opened from the header button, the footer link, the consent help link or the #privacy address.
+if (typeof document !== 'undefined' && typeof location !== 'undefined' && typeof window !== 'undefined' && $('#privacy-dialog')?.showModal) {
+  const privacyDialog = $('#privacy-dialog');
+  const privacyMessage = (text, isError) => { const box = $('#privacy-message'); box.textContent = text; box.hidden = !text; box.classList.toggle('error', !!isError); };
+  const openPrivacy = event => { event?.preventDefault(); privacyMessage(''); if (!privacyDialog.open) privacyDialog.showModal(); };
+  $('#open-privacy').addEventListener('click', openPrivacy);
+  document.querySelectorAll('[data-open-privacy]').forEach(el => el.addEventListener('click', openPrivacy));
+  $('#close-privacy').addEventListener('click', () => privacyDialog.close());
+  privacyDialog.addEventListener('click', event => { if (event.target === privacyDialog) privacyDialog.close(); });
+  const privacyFromAddress = () => { if (location.hash === '#privacy') openPrivacy(); };
+  privacyFromAddress(); window.addEventListener('hashchange', privacyFromAddress);
+  $('#privacy-delete').addEventListener('click', async () => {
+    if ($('#privacy-delete-confirm').value.trim() !== 'DELETE') return privacyMessage('Type DELETE in the box to confirm erasing your data.', true);
+    $('#privacy-delete').disabled = true;
+    try {
+      await post('/api/career/delete', { confirm: 'DELETE' });
+      $('#privacy-delete-confirm').value = '';
+      privacyMessage('Your data has been permanently deleted from this app. The page will now reload.');
+      setTimeout(() => location.reload(), 2500);
+    } catch (error) { privacyMessage(error.message, true); $('#privacy-delete').disabled = false; }
+  });
+}
