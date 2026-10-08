@@ -1,4 +1,4 @@
-import {seal,unseal} from './career-store.js';
+import {seal,unseal,retentionSeconds} from './career-store.js';
 import { readFileSync, mkdirSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -16,7 +16,7 @@ export class DecisionStore {
   async load(user) { if (!this.kv) return; const value = await this.kv.get('decisions:' + user); if (value) this.data[user] = unseal(value, this.key); else delete this.data[user]; }
   async flush() { while (this.pending.length) await Promise.all(this.pending.splice(0)); }
   persist(user, next) {
-    if (this.kv) { this.pending.push(next[user] ? this.kv.set('decisions:' + user, seal(next[user], this.key)) : this.kv.del('decisions:' + user)); this.data = next; return; }
+    if (this.kv) { this.pending.push(next[user] ? this.kv.set('decisions:' + user, seal(next[user], this.key), retentionSeconds) : this.kv.del('decisions:' + user)); this.data = next; return; }
     mkdirSync(dirname(this.path), { recursive: true });
     writeFileSync(this.path + '.tmp', this.key ? seal(next,this.key) : JSON.stringify(next), { mode: 0o600 });
     renameSync(this.path + '.tmp', this.path);

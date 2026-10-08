@@ -2,6 +2,8 @@ import {createCipheriv,createDecipheriv,randomBytes} from 'node:crypto';
 import {existsSync,readFileSync,writeFileSync,mkdirSync,renameSync} from 'node:fs';
 import {dirname,join} from 'node:path';
 import {execFileSync} from 'node:child_process';
+// Hosted data is removed automatically 12 months after the user's last update (see the privacy notice).
+export const retentionSeconds=365*24*60*60;
 export function loadDataKey(directory){
   if(process.env.CAREER_DATA_KEY){const key=Buffer.from(process.env.CAREER_DATA_KEY,'base64');if(key.length!==32)throw new Error('CAREER_DATA_KEY must encode 32 bytes.');return key;}
   if(process.platform!=='win32')throw new Error('Set CAREER_DATA_KEY to protect stored career data.');
@@ -18,6 +20,6 @@ export class CareerStore{
   async load(user){if(!this.kv)return;const [value,generation]=await Promise.all([this.kv.get('career:'+user),this.kv.get('career-gen:'+user)]);this.generations.set(user,Number(generation)||0);if(value)this.data[user]=unseal(value,this.key);else delete this.data[user];}
   async loadAll(){if(!this.kv)return;for(const name of await this.kv.keys('career:'))await this.load(name.slice('career:'.length));}
   async flush(){while(this.pending.length)await Promise.all(this.pending.splice(0));}
-  save(user,value){if((value._generation||0)!==(this.generations.get(user)||0))throw new Error('This data was deleted; cancelled the pending update.');this.data[user]=value;if(this.kv){this.pending.push(this.kv.set('career:'+user,seal(value,this.key)));return;}mkdirSync(dirname(this.path),{recursive:true});writeFileSync(this.path+'.tmp',seal(this.data,this.key),{mode:0o600});renameSync(this.path+'.tmp',this.path);}
+  save(user,value){if((value._generation||0)!==(this.generations.get(user)||0))throw new Error('This data was deleted; cancelled the pending update.');this.data[user]=value;if(this.kv){this.pending.push(this.kv.set('career:'+user,seal(value,this.key),retentionSeconds));return;}mkdirSync(dirname(this.path),{recursive:true});writeFileSync(this.path+'.tmp',seal(this.data,this.key),{mode:0o600});renameSync(this.path+'.tmp',this.path);}
   remove(user){const generation=(this.generations.get(user)||0)+1;this.generations.set(user,generation);delete this.data[user];if(this.kv){this.pending.push(this.kv.del('career:'+user),this.kv.set('career-gen:'+user,String(generation)));return;}mkdirSync(dirname(this.path),{recursive:true});writeFileSync(this.path+'.tmp',seal(this.data,this.key),{mode:0o600});renameSync(this.path+'.tmp',this.path);}
 }

@@ -745,3 +745,12 @@ function initApplicationGuide(){
  if(state.resumeReady!==undefined)applicationGuide.update();
 }
 initApplicationGuide();
+
+// Privacy notice: permanently erase this visitor's stored data.
+if (typeof document !== 'undefined' && $('#privacy-delete')) $('#privacy-delete').addEventListener('click', () => action(async () => {
+  if ($('#privacy-delete-confirm').value.trim() !== 'DELETE') throw new Error('Type DELETE in the box to confirm erasing your data.');
+  await post('/api/career/delete', { confirm: 'DELETE' });
+  $('#privacy-delete-confirm').value = '';
+  notify('Your data has been permanently deleted from this app. The page will now reload.');
+  setTimeout(() => location.reload(), 2500);
+}));

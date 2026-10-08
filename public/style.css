@@ -112,3 +112,13 @@ main>.application-guide{position:relative;top:auto;margin:8px 0 18px;border:1px 
 .pilot-testing-notice[hidden]{display:flex!important}#sign-out.sign-out-button{display:inline-flex;align-items:center;justify-content:center;min-height:52px;min-width:150px;padding:14px 22px;font-size:16px;font-weight:750;background:#0b1933;color:#fff;border:2px solid #ffdb00;border-radius:6px;box-shadow:0 3px 10px #0b19331a;letter-spacing:.2px;margin-left:12px}#sign-out.sign-out-button:hover:not(:disabled){background:#17325b;box-shadow:0 4px 14px #0b193330}#sign-out.sign-out-button:focus-visible{outline:3px solid var(--primary);outline-offset:4px}.result-actions{align-items:center;flex-wrap:wrap;gap:10px}.result-actions #sign-out{order:10}@media(max-width:600px){#sign-out.sign-out-button{margin-left:0;min-height:48px;min-width:145px}.results-heading{align-items:flex-start}}
 header #sign-out.sign-out-button{margin-left:auto;position:relative;order:0;min-height:48px;padding:11px 22px}header #sign-out[hidden]{display:none!important}header{display:flex;align-items:center;justify-content:space-between;gap:16px}@media(max-width:600px){header #sign-out.sign-out-button{min-width:130px;font-size:14px}header{min-height:70px}}
 #share-whatsapp-links{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}#share-recipient-help,#share-phone-help{display:block;color:var(--muted);font-size:12px;line-height:1.5;margin:8px 0 14px}
+
+.privacy-notice{max-width:760px;margin:0 auto 18px;text-align:left;font-size:13px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.privacy-notice summary{cursor:pointer;padding:14px 18px;font-weight:600;color:var(--primary);list-style-position:inside}
+.privacy-body{padding:0 18px 16px;line-height:1.6}
+.privacy-body p{margin:0 0 10px}
+.privacy-delete{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 12px}
+.privacy-delete label{font-weight:600;width:100%}
+.privacy-delete input{flex:1 1 180px;min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:10px;font:inherit}
+.privacy-delete button{min-height:44px}
+.privacy-updated{color:var(--muted);font-size:12px}
