@@ -120,8 +120,6 @@ header #sign-out.sign-out-button{margin-left:auto;position:relative;order:0;min-
 .privacy-trigger:hover svg,.privacy-trigger:focus-visible svg{color:#080e20}
 .privacy-trigger-short{display:none}
 @media(max-width:650px){.privacy-trigger{padding:0 14px 0 11px;font-size:12px}.privacy-trigger-text{display:none}.privacy-trigger-short{display:inline}}
-.privacy-footer-link{display:inline-block;margin:0 auto 12px;padding:8px 14px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--primary);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
-.privacy-footer-link:hover{border-color:var(--primary)}
 /* Privacy notice: dialog */
 dialog.privacy-dialog{padding:0;max-width:760px;overflow:auto;border:0}
 .privacy-hero{position:relative;display:flex;gap:18px;align-items:flex-start;padding:30px 64px 28px 30px;background:radial-gradient(circle at 92% 0%,#ffdb0033,transparent 45%),#080e20;color:#fff}
