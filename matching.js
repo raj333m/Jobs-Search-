@@ -36,7 +36,12 @@ const domains = {
   'Data Warehouse': /data\s*warehous|\bdwh\b|\bedw\b/i,
   'Data Governance': /data governance/i,
   'Data Quality': /data quality/i,
-  'Data Lineage': /data lineage/i
+  'Data Lineage': /data lineage/i,
+  'Cards & Payments': /\bcards?\b|\bpayments?\b|\bacquiring\b|card schemes?/i,
+  'Consumer Credit': /consumer credit|credit bureau|credit reference|\bccds\b|\bcra\b/i,
+  'Lending & Mortgages': /\bmortgages?\b|\blending\b|\bloans?\b/i,
+  'Wealth Management': /wealth management|private banking|asset management/i,
+  Treasury: /\btreasury\b/i
 };
 const general = {
   SQL: /\bsql\b|structured query language/i,
@@ -63,7 +68,10 @@ const general = {
   Agile: /\bagile\b|\bscrum\b/i,
   Jira: /\bjira\b/i,
   'Business Analysis': /business analy(?:sis|st)/i,
-  'Requirements Gathering': /requirements? (?:gather|elicit)|elicitation/i,
+  'Requirements Gathering': /requirements? (?:analysis|gather|elicit|management|matrix)|elicitation|\bbrds?\b|\bfrds?\b/i,
+  'Process Mapping': /\bvisio\b|lucid ?charts?|process (?:map|flow)/i,
+  Consulting: /consult(?:ing|ancy)|client advisory/i,
+  'Team Leadership': /leading and managing|people management|lead(?:ing)? a team|managing a (?:group|team)|\bmentor/i,
   'Stakeholder Management': /stakeholder/i,
   AWS: /\baws\b|amazon web services/i,
   Azure: /\bazure\b/i,
@@ -88,8 +96,10 @@ export function fitScore(required, matched, title = '') {
   let score = Math.round(got / total * 100); const notes = [];
   const platformGaps = required.filter(name => isPlatform(name) && !matched.includes(name));
   const titleGaps = platformGaps.filter(name => platforms[name].test(title));
+  const titleDomainGaps = required.filter(name => name in domains && !matched.includes(name) && domains[name].test(title));
   if (titleGaps.length) { score = Math.min(score, 30); notes.push(`The role is built around ${titleGaps.join(', ')}, which your resume does not show.`); }
   else if (platformGaps.length) { score = Math.min(score, 45); notes.push(`The role needs ${platformGaps.join(', ')}, which your resume does not show.`); }
+  if (titleDomainGaps.length) { score = Math.min(score, 40); notes.push(`The role is in ${titleDomainGaps.join(', ')}, which your resume does not show.`); }
   if (required.length < 4) { score = Math.min(score, 70); notes.push(`Only ${required.length} requirement${required.length === 1 ? '' : 's'} could be checked automatically; read the full description.`); }
   return { score, notes, platformGaps };
 }
