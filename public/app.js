@@ -183,7 +183,7 @@ function render() {
     const meta=[j.company,j.location,j.workMode].filter(Boolean).map(esc).join(' · ');
     return '<article class="fit-card"><label class="share-job-check"><input type="checkbox" class="select-share-job" data-id="'+esc(j.id)+'" '+(sharedJobIds.has(j.id)?'checked':'')+' aria-label="Select '+esc(j.title)+' for sharing"> <span>Share</span></label><button class="fit-ring review '+(score<80?'warm':'')+'" data-id="'+esc(j.id)+'" aria-label="Explain '+score+'% match" title="'+esc(matchRationale(j))+'" aria-describedby="match-tip-'+esc(j.id)+'"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="ring-track" cx="50" cy="50" r="42"/><circle class="ring-progress" cx="50" cy="50" r="42" pathLength="100" stroke-dasharray="'+score+' 100"/></svg><span>'+score+'<small>% match</small></span><span class="match-hover-tip" role="tooltip" id="match-tip-'+esc(j.id)+'">'+esc(matchRationale(j))+'</span></button><div class="fit-card-content"><h3>'+esc(j.title)+'</h3><p class="fit-meta">'+meta+'</p><div class="fit-chips">'+chips+'</div><div class="fit-footnote">'+(j.posted?'Posted '+esc(j.posted):'')+(j.salaryUnknown?' · Unknown salary':'')+'</div><div class="fit-card-tools"><button class="fit-text-action decision" data-id="'+esc(j.id)+'" data-status="Seen">Save Job</button><button class="fit-text-action decision" data-id="'+esc(j.id)+'" data-status="Applied">Applied Job</button><button class="fit-text-action review" data-view="interview" data-id="'+esc(j.id)+'">View & prepare ↗</button>'+(j.outreach?'<button class="fit-text-action review" data-view="outreach" data-id="'+esc(j.id)+'">Draft outreach email</button>':'')+'</div></div><button class="fit-open review" aria-label="Open '+esc(j.title)+' at '+esc(j.company)+'" data-id="'+esc(j.id)+'">Open <span aria-hidden="true">↗</span></button></article>';
   }).join('');
-  $('#job-list').innerHTML = '<div class="fit-list-toolbar"><span>Ranked by your match score</span>'+locationTabs+'</div>'+(jobs.length?'<div class="fit-card-list">'+cards+'</div><p class="fit-list-count">'+jobs.length+' of '+state.jobs.length+' loaded matches shown</p>':'<div class="empty"><div class="upload-icon">◈</div><h3>'+(submitted?'No matching vacancies found':'Your next opportunity starts here')+'</h3><p>'+(submitted?'Try another location filter or adjust your search preferences.':'Upload your resume, confirm your profile and Submit to see your best matches.')+'</p></div>');
+  $('#job-list').innerHTML = '<div class="fit-list-toolbar"><span>Ranked by your match score</span>'+locationTabs+'</div>'+(jobs.length?'<div class="fit-card-list">'+cards+'</div><p class="fit-list-count">'+jobs.length+' of '+state.jobs.length+' loaded matches shown</p>':'<div class="empty"><div class="upload-icon">◈</div><h3>'+(submitted?'No Jobs identified for selected preference':'Your next opportunity starts here')+'</h3><p>'+(submitted?'Please try again by changing the preference.':'Upload your resume, confirm your profile and Submit to see your best matches.')+'</p></div>');
   document.querySelectorAll('[data-result-location]').forEach(button=>button.addEventListener('click',()=>{resultLocation=button.dataset.resultLocation;render();}));
   document.querySelectorAll('.review').forEach(button => button.addEventListener('click', () => showDetail(button.dataset.id, button.dataset.view)));
   document.querySelectorAll('.decision').forEach(button => button.addEventListener('click', () => action(() => saveDecision(button.dataset.id, button.dataset.status, button))));
@@ -466,8 +466,13 @@ async function runSearch(isRefresh = false, manual = false) {
     notify(isRefresh ? 'Refreshing vacancies and matching your resume…' : 'Finding matching vacancies…');
     let bankNotice = '';
     if (state.bankSourcesAvailable && selectedBanks().length && !manual && !demoMode) {
-      const result = await post('/api/bank-search', { banks: selectedBanks(), threshold: $('#threshold').value, limit: $('#record-limit').value, locations: locationPreferences, designations: designationPreferences, today: localToday() });
-      bankNotice = result.messages.join(' ');
+      try {
+        const result = await post('/api/bank-search', { banks: selectedBanks(), threshold: $('#threshold').value, limit: $('#record-limit').value, locations: locationPreferences, designations: designationPreferences, today: localToday() });
+        bankNotice = result.messages.join(' ');
+      } catch (error) {
+        // A slow or unavailable employer site must not leave the user stuck on the form: show whatever was found.
+        bankNotice = 'Some employer sites did not respond in time. Showing the matches that were found.';
+      }
     }
     if (state.feedConfigured && !manual && !demoMode) await post('/api/feed', { threshold: $('#threshold').value, limit: $('#record-limit').value, locations: locationPreferences, experience: experienceProfile() });
     appliedThreshold = Number($('#threshold').value); submitted = true;
@@ -484,8 +489,8 @@ async function runSearch(isRefresh = false, manual = false) {
     if(typeof window!=='undefined')window.dispatchEvent(new Event('career-search-completed'));
     if (demoMode) { notify(`${filtered().length} fictional sample vacancies match your selection. No real jobs or connections are used.`); $('#matches').scrollIntoView({ behavior: 'smooth' }); return; }
     notify(`${filtered().length} matching vacancies at ${appliedThreshold}% or above.${state.bankSourcesAvailable ? ' Employer careers pilot searched.' : state.feedConfigured ? ' Configured job feed refreshed.' : ' Using added or imported vacancies.'}`);
-    if (bankNotice) notify(`${filtered().length} matching vacancies found.`);
-    applicationGuide?.tell(filtered().length?'Your matches are ready. Open a vacancy to review it, save it or apply.':'No jobs matched this search. Try a broader role, another city or a lower match threshold.');
+    if (bankNotice) notify(filtered().length ? `${filtered().length} matching vacancies found.` : 'No Jobs identified for selected preference, Please try again by changing the preference.');
+    applicationGuide?.tell(filtered().length?'Your matches are ready. Open a vacancy to review it, save it or apply.':'No Jobs identified for selected preference, Please try again by changing the preference.');
     $('#matches').scrollIntoView({ behavior: 'smooth' });
   } finally { stopSearchEngagement(); searching = false; render(); }
 }
