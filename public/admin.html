@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin · Your Next Move Awaits</title>
+<link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+<main class="wrap">
+  <header><div><p class="kicker">Private · owner only</p><h1>Who used the app</h1></div><button id="logout" class="ghost" type="button" hidden>Sign out</button></header>
+  <section id="login" class="card" hidden>
+    <h2>Sign in</h2>
+    <p class="muted">Enter the admin password you set in Vercel.</p>
+    <form id="login-form"><label for="password">Admin password</label><input id="password" type="password" autocomplete="current-password" required><button type="submit">Sign in</button></form>
+    <p id="login-error" class="error" role="alert" hidden></p>
+  </section>
+  <section id="report" hidden>
+    <div class="toolbar">
+      <label for="days">Show</label>
+      <select id="days"><option value="7" selected>Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select>
+      <a id="csv" class="button" href="/api/admin/export.csv?days=7">Download Excel (CSV)</a>
+      <span id="ai-status" class="pill"></span>
+    </div>
+    <p id="summary" class="muted"></p>
+    <div id="users"></div>
+  </section>
+  <p id="disabled" class="card" hidden>The admin page is switched off. Add ADMIN_PASSWORD in Vercel to switch it on.</p>
+</main>
+<script src="/admin.js"></script>
+</body>
+</html>
