@@ -656,7 +656,7 @@ $('#save-profile').addEventListener('click', () => action(async () => {
 action(refresh);
 
 for (const id of ['bank-barclays', 'bank-deutsche', 'bank-citi', 'employer-pwc', 'employer-genpact', 'employer-fis', 'employer-fiserv', 'employer-mastercard', 'employer-salesforce', 'employer-adobe']) $('#'+id)?.addEventListener('change', () => { submitted = false; render(); });
-const employerIds = ['bank-barclays', 'bank-deutsche', 'bank-citi', 'employer-mastercard', 'employer-fis', 'employer-fiserv', 'employer-pwc', 'employer-genpact', 'employer-salesforce', 'employer-adobe'];
+const employerIds = ['bank-barclays', 'bank-deutsche', 'bank-citi', 'employer-mastercard', 'employer-fis', 'employer-fiserv', 'employer-pwc', 'employer-genpact', 'employer-siemens', 'employer-salesforce', 'employer-adobe'];
 function updateEmployerCount() { const box = $('#employer-count'); if (!box) return; const on = employerIds.filter(id => $('#'+id)?.checked).length; box.textContent = `${on} of ${employerIds.length} selected`; }
 for (const id of employerIds) $('#'+id)?.addEventListener('change', updateEmployerCount);
 for (const [button, value] of [['#employers-all', true], ['#employers-none', false]]) $(button)?.addEventListener('click', () => { for (const id of employerIds) { const box = $('#'+id); if (box) box.checked = value; } updateEmployerCount(); submitted = false; render(); });
