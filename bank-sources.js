@@ -25,10 +25,13 @@ export function workdayJob(info, bank) {
     applyLink: url.href, applicationOpen: true, businessVerticals: provider.verticals || (bank === 'PwC' ? ['Professional Services', 'Consulting'] : ['Banking']),
     whyRelevant: 'Official application system confirmed this India vacancy is posted and accepting applications at search time.' };
 }
+// Every search shares one time budget so the hosted request always finishes before the platform's 60-second limit.
+const timeLeft = preferences => (preferences.deadline || Infinity) - Date.now();
+const requestTimeout = preferences => { const left = timeLeft(preferences); if (left < 1500) throw new Error('time limit reached'); return Math.max(1000, Math.min(10000, left - 500)); };
 async function searchWorkday(bank, preferences, fetcher) {
   const config = workdayBanks[bank], paths = new Set(), jobs = []; let failures = 0;
   const json = async (url, options = {}) => {
-    const response = await fetcher(url, { ...options, signal: AbortSignal.timeout(15000), redirect: 'error' });
+    const response = await fetcher(url, { ...options, signal: AbortSignal.timeout(requestTimeout(preferences)), redirect: 'error' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
   };
@@ -48,8 +51,8 @@ async function searchWorkday(bank, preferences, fetcher) {
     if (!Array.isArray(data.jobPostings)) throw new Error('Unexpected search response');
     for (const job of data.jobPostings) if (typeof job.externalPath === 'string' && /^\/job\/[A-Za-z0-9_/-]+$/.test(job.externalPath)) paths.add(job.externalPath);
   }
-  const queue = [...paths].slice(0, 30);
-  for (let i = 0; i < queue.length; i += 3) await Promise.all(queue.slice(i, i + 3).map(async path => {
+  const queue = [...paths].slice(0, 15);
+  for (let i = 0; i < queue.length && timeLeft(preferences) > 3000; i += 6) await Promise.all(queue.slice(i, i + 6).map(async path => {
     try { const data = await json(config.base + path); const job = workdayJob(data.jobPostingInfo, bank); if (job && job.description.length >= 40 && isRecentOpen(job, preferences.today)) jobs.push(job); } catch { failures++; }
   }));
   return { jobs, message: `${bank}: checked ${queue.length} vacancy pages; ${jobs.length} recent India vacancies confirmed accepting applications; ${failures} retrieval failures. Your preferences are applied to these vacancies.` };
@@ -75,11 +78,12 @@ export async function searchBanks(preferences, fetcher = fetch) {
   if (!Array.isArray(preferences.designations) || !preferences.designations.length || preferences.designations.length > 20 || preferences.designations.some(r => typeof r !== 'string' || !r.trim() || r.length > 100)) throw new Error('Select job designations.');
   const jobs = [], messages = [];
   const get = async url => {
-    const response = await fetcher(url, { signal: AbortSignal.timeout(15000), redirect: 'error' });
+    const response = await fetcher(url, { signal: AbortSignal.timeout(requestTimeout(preferences)), redirect: 'error' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const html = await response.text(); if (html.length > 4000000) throw new Error('Response too large'); return html;
   };
   if (Number(preferences.limit) === 0) return { jobs, messages: ['Record count is 0; no sources queried.'] };
+  preferences.deadline ||= Date.now() + (preferences.budgetMs || 40000);
   const runBank = async bank => {
     if(bank==='Siemens'){try{const found=await searchSiemens(preferences,fetcher);jobs.push(...found.jobs);messages.push(found.message);}catch(error){messages.push('Siemens: search unavailable ('+error.message+').');}return;}
     if (workdayBanks[bank]) {
@@ -109,9 +113,9 @@ export async function searchBanks(preferences, fetcher = fetch) {
           }
         }
       }
-      const queue = [...links].slice(0, 30); discovered = queue.length;
-      for (let offset = 0; offset < queue.length; offset += 3) {
-        await Promise.all(queue.slice(offset, offset + 3).map(async url => {
+      const queue = [...links].slice(0, 15); discovered = queue.length;
+      for (let offset = 0; offset < queue.length && timeLeft(preferences) > 3000; offset += 6) {
+        await Promise.all(queue.slice(offset, offset + 6).map(async url => {
           try {
             const html = await get(url), data = structuredJob(html); if (!data) { failures++; return; }
             let open = false;
@@ -132,7 +136,7 @@ export async function searchBanks(preferences, fetcher = fetch) {
       messages.push(`${bank}: checked ${discovered} vacancy pages; ${unverified} excluded because open status is unverified; ${failures} retrieval failures.`);
     } catch (error) { messages.push(`${bank}: search unavailable (${error.message}).`); }
   }
-  for(let i=0;i<banks.length;i+=3)await Promise.all(banks.slice(i,i+3).map(runBank));
-  messages.push('Pilot coverage: first search page for 2 designations, up to 30 vacancy pages per bank. Barclays/HSBC discovery uses up to 4 cities; selected location filters apply to all results. Coverage is not exhaustive.');
+  await Promise.all(banks.map(runBank));
+  messages.push('Pilot coverage: first search page for 2 designations, up to 15 vacancy pages per employer, within a 40-second search limit. Barclays/HSBC discovery uses up to 4 cities; selected location filters apply to all results. Coverage is not exhaustive.');
   return { jobs, messages };
 }
