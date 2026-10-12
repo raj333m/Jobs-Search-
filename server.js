@@ -22,6 +22,8 @@ import { jobKey, selectJobs, validDate, todayInIndia } from './workflow.js';
 import { DecisionStore } from './decision-store.js';
 import { searchBanks } from './bank-sources.js';
 import { employerSources } from './employer-sources.js';
+import { aiConfigured, aiScoreJobs, withAi, AI_MAX_JOBS } from './ai-match.js';
+import { adminApi, consented, recordSearch, recordUpload, saveResumeFile, CONSENT_VERSION } from './admin-api.js';
 
 const port = Number(process.env.PORT || 3000);
 const appUrl = process.env.APP_URL || `http://localhost:${port}`;
@@ -34,7 +36,7 @@ const dataKey=loadDataKey(dirname(vaultPath));
 const careerStore=new CareerStore(vaultPath,dataKey,kv);
 export const scheduler = kv ? null : startCareerScheduler(careerStore);
 const decisions = new DecisionStore(process.env.DECISION_STORE_PATH || fileURLToPath(new URL('./data/decisions.json', import.meta.url)),dataKey,kv);
-const publicFiles = { '/': ['public/index.html', 'text/html'], '/app.js': ['public/app.js', 'text/javascript'], '/style.css': ['public/style.css', 'text/css'], '/career.js':['public/career.js','text/javascript'] };
+const publicFiles = { '/': ['public/index.html', 'text/html'], '/app.js': ['public/app.js', 'text/javascript'], '/style.css': ['public/style.css', 'text/css'], '/career.js':['public/career.js','text/javascript'], '/admin.js':['public/admin.js','text/javascript'], '/admin.css':['public/admin.css','text/css'] };
 if (!kv) setInterval(() => { for (const [id, session] of sessions) if (Date.now() - session.lastSeen > 86400000) sessions.delete(id); }, 3600000).unref();
 const sessionTtlSeconds = 86400;
 const cookieValue = (req, name) => new RegExp(`(?:^|; )${name}=([a-f0-9]{48})(?:;|$)`).exec(req.headers.cookie || '')?.[1];
@@ -89,7 +91,7 @@ function send(res, status, data, type = 'application/json') {
 }
 function results(session) {
   const history = decisions.forUser(session.user);
-  const saved=careerStore.get(session.user);const all=mergePostings(session.jobs,saved.splitKeys||[]).filter(job=>history[job.key]?.status!=='Applied'&&saved.decisions[job.key]?.status!=='Applied');return all.map(job=>saved.profile?.confirmed ? {...scoreProfile(saved.profile,job,saved.settings,saved.synonyms),...hardFilter(job,saved.profile,saved.settings)} : matchJob(session.resume,job)).map(job=>({...job,status:history[job.key]?.status==='Seen'?'Saved':job.status})).filter(j=>!j.hidden);
+  const saved=careerStore.get(session.user);const all=mergePostings(session.jobs,saved.splitKeys||[]).filter(job=>history[job.key]?.status!=='Applied'&&saved.decisions[job.key]?.status!=='Applied');return all.map(job=>saved.profile?.confirmed ? {...scoreProfile(saved.profile,job,saved.settings,saved.synonyms),...hardFilter(job,saved.profile,saved.settings)} : matchJob(session.resume,job)).map(job=>withAi(job,session.resume)).map(job=>({...job,status:history[job.key]?.status==='Seen'?'Saved':job.status})).filter(j=>!j.hidden);
 }
 function addJobs(session, input) {
   if (!Array.isArray(input) || input.length > 500) throw new Error('Import an array of up to 500 vacancies.');
@@ -113,6 +115,7 @@ export const handler = async (req, res) => {
   try {
     const url = new URL(req.url, appUrl);
     if (req.method === 'GET' && publicFiles[url.pathname]) { const [file, type] = publicFiles[url.pathname]; return send(res, 200, await readFile(new URL(file, import.meta.url)), type); }
+    if (await adminApi(req, res, url, { store: careerStore, kv, key: dataKey, body, send, appUrl, readPage: () => readFile(new URL('public/admin.html', import.meta.url)) })) return;
     const session = sessionFor(req, res);
     if (req.method === 'POST' && req.headers.origin !== new URL(appUrl).origin) return send(res, 403, { error: 'Request origin does not match APP_URL.' });
     if (req.method === 'POST' && url.pathname === '/api/bank-search') {
@@ -121,10 +124,21 @@ export const handler = async (req, res) => {
       const preferences = JSON.parse((await body(req)).toString());
       if (!['25', '50', '75', '100'].includes(String(preferences.threshold)) || !Number.isInteger(Number(preferences.limit)) || Number(preferences.limit) < 0 || Number(preferences.limit) > 15) throw new Error('Select valid match and record settings.');
       preferences.today = validDate(preferences.today) || todayInIndia();
+      const started = Date.now(); const useAi = aiConfigured() && consented(careerStore.get(session.user));
+      // Leave time for the AI check inside Vercel's 60-second limit.
+      if (useAi) preferences.budgetMs = 32000;
       const found = await searchBanks(preferences);
       // Replace prior pilot results so closed or removed vacancies cannot survive later runs.
       session.jobs = session.jobs.filter(job => !employerSources.some(source => job.source === source.name + ' official careers'));
-      addJobs(session, found.jobs);const stored=careerStore.get(session.user);stored.jobs=session.jobs;stored.health=found.messages.map(message=>({source:'Search',message,status:message.includes('unavailable')?'Failed':'Healthy',at:new Date().toISOString()}));careerStore.save(session.user,stored);
+      addJobs(session, found.jobs);
+      if (useAi && found.jobs.length) {
+        const byId = new Map(session.jobs.map(job => [job.id, job]));
+        const top = results(session).filter(job => job.score !== null).sort((a, b) => (b.ruleScore ?? b.score) - (a.ruleScore ?? a.score)).slice(0, AI_MAX_JOBS).map(job => byId.get(job.id)).filter(Boolean);
+        const ai = await aiScoreJobs(session.resume, top, { deadline: started + 50000 });
+        if (ai.scored) found.messages.push(`Claude AI read the top ${ai.scored} job descriptions against your resume.`);
+        if (ai.failed) found.messages.push(`${ai.failed} job${ai.failed === 1 ? ' was' : 's were'} scored by keywords only because the AI check did not finish in time.`);
+      }
+      const stored=careerStore.get(session.user);recordSearch(stored, preferences, found.jobs.length);stored.jobs=session.jobs;stored.health=found.messages.map(message=>({source:'Search',message,status:message.includes('unavailable')?'Failed':'Healthy',at:new Date().toISOString()}));careerStore.save(session.user,stored);
       return send(res, 200, { ok: true, retrieved: found.jobs.length, messages: found.messages });
     }
     if(req.method==='POST'&&url.pathname==='/api/share/jobs'){
@@ -148,7 +162,7 @@ export const handler = async (req, res) => {
       return send(res, 200, { resumeReady: !!session.resume, profileConfirmed: !!careerStore.get(session.user).profile?.confirmed, resumeName: session.resumeName, jobs: selected.jobs.map(job=>({...job,preparation:jobPreparation(job,careerStore.get(session.user).profile,session.resume)})), totalMatches: selected.total, decisionCounts: { seen: history.filter(d => d.status === 'Seen').length, applied: history.filter(d => d.status === 'Applied').length }, linkedin: session.linkedin || null, linkedinConfigured: linkedinConfigured(), bankSourcesAvailable: true, employerSources, feedConfigured: !!process.env.JOB_FEED_URL, jobSources: { linkedin: !!process.env.JOB_FEED_URL && process.env.JOB_FEED_SOURCE === 'linkedin', naukri: !!process.env.JOB_FEED_URL && process.env.JOB_FEED_SOURCE === 'naukri' } });
     }
     if (req.method === 'POST' && url.pathname === '/api/resume') {
-      const stored=careerStore.get(session.user);if(!stored.consent)throw new Error('Accept the data-storage notice before uploading.');
+      const stored=careerStore.get(session.user);if(!stored.consent)throw new Error('Accept the data-storage notice before uploading.');if((stored.consentVersion||0)<CONSENT_VERSION)throw new Error('The privacy notice has been updated. Untick and tick the consent box again to accept it, then upload.');
       const buffer = await body(req,5*1024*1024); const name = decodeURIComponent(req.headers['x-file-name'] || 'resume.txt');
       let text;
       if (/\.pdf$/i.test(name)) text = (await pdf(buffer)).text;
@@ -156,7 +170,7 @@ export const handler = async (req, res) => {
       else if (/\.txt$/i.test(name)) text = buffer.toString('utf8');
       else throw new Error('Use a PDF, DOCX, or TXT resume.');
       if (text.trim().length < 40) throw new Error('No readable resume text found. For scanned PDFs, upload a text-based PDF or TXT export.');
-      session.resume = text.slice(0,100000);session.resumeName=name.slice(0,200);const risks=[];if(/\.docx$/i.test(name)){const zip=await JSZip.loadAsync(buffer);const xml=await zip.file('word/document.xml')?.async('string')||'';if(/<w:tbl[ >]/.test(xml))risks.push('Tables detected; ATS reading order may differ.');if(/<w:cols[^>]*w:num="[2-9]/.test(xml))risks.push('Multiple columns detected.');if(/txbxContent/.test(xml))risks.push('Text boxes detected.');if(Object.keys(zip.files).some(n=>/^word\/(header|footer)/.test(n)))risks.push('Headers or footers detected; keep contact details in the main body.');if(Object.keys(zip.files).some(n=>n.startsWith('word/media/')))risks.push('Images detected; keep critical information in plain text.');}if(/\.pdf$/i.test(name))risks.push('PDF text extraction cannot reliably detect columns or tables; confirm reading order.');if(stored.profile)stored.history.push({at:new Date().toISOString(),profile:stored.profile});stored.profile=parseProfile(session.resume,risks);stored.resumeText=session.resume;stored.resumeName=session.resumeName;careerStore.save(session.user,stored);
+      session.resume = text.slice(0,100000);session.resumeName=name.slice(0,200);const risks=[];if(/\.docx$/i.test(name)){const zip=await JSZip.loadAsync(buffer);const xml=await zip.file('word/document.xml')?.async('string')||'';if(/<w:tbl[ >]/.test(xml))risks.push('Tables detected; ATS reading order may differ.');if(/<w:cols[^>]*w:num="[2-9]/.test(xml))risks.push('Multiple columns detected.');if(/txbxContent/.test(xml))risks.push('Text boxes detected.');if(Object.keys(zip.files).some(n=>/^word\/(header|footer)/.test(n)))risks.push('Headers or footers detected; keep contact details in the main body.');if(Object.keys(zip.files).some(n=>n.startsWith('word/media/')))risks.push('Images detected; keep critical information in plain text.');}if(/\.pdf$/i.test(name))risks.push('PDF text extraction cannot reliably detect columns or tables; confirm reading order.');if(stored.profile)stored.history.push({at:new Date().toISOString(),profile:stored.profile});stored.profile=parseProfile(session.resume,risks);stored.resumeText=session.resume;stored.resumeName=session.resumeName;recordUpload(stored,name,buffer.length);careerStore.save(session.user,stored);await saveResumeFile(kv,dataKey,session.user,stored,name,buffer);
       return send(res, 200, { ok: true });
     }
     if (req.method === 'POST' && url.pathname === '/api/jobs') { if (!session.resume) throw new Error('Upload a resume first.'); addJobs(session, JSON.parse((await body(req)).toString())); const stored=careerStore.get(session.user);stored.jobs=session.jobs;careerStore.save(session.user,stored);return send(res,200,{ok:true}); }
@@ -178,7 +192,7 @@ export const handler = async (req, res) => {
       const data = JSON.parse((await body(req)).toString());
       const job = session.jobs.find(j => j.id === data.id);
       if (!job) throw new Error('Vacancy not found. Refresh your results.');
-      decisions.set(session.user,job.key,data.status||'Seen');const stored=careerStore.get(session.user);stored.decisions[job.key]={status:data.status||'Seen',updatedAt:new Date().toISOString()};if(data.status==='Applied'){let entry=stored.pipeline.find(a=>a.key===job.key);if(!entry){entry={key:job.key,job,history:[],resumeVersion:stored.profile?.version};stored.pipeline.push(entry);}entry.history.push({from:entry.stage||null,to:'Applied',at:new Date().toISOString()});entry.stage='Applied';entry.updatedAt=new Date().toISOString();}careerStore.save(session.user,stored);
+      decisions.set(session.user,job.key,data.status||'Seen');const stored=careerStore.get(session.user);stored.decisions[job.key]={status:data.status||'Seen',updatedAt:new Date().toISOString(),title:String(job.title||'').slice(0,200),company:String(job.company||'').slice(0,200)};if(data.status==='Applied'){let entry=stored.pipeline.find(a=>a.key===job.key);if(!entry){entry={key:job.key,job,history:[],resumeVersion:stored.profile?.version};stored.pipeline.push(entry);}entry.history.push({from:entry.stage||null,to:'Applied',at:new Date().toISOString()});entry.stage='Applied';entry.updatedAt=new Date().toISOString();}careerStore.save(session.user,stored);
       return send(res, 200, { ok: true });
     }
     if (req.method === 'POST' && ['/api/clear','/api/signout'].includes(url.pathname)) { const saved = careerStore.get(session.user); if (saved.resumeText || saved.resumeName || saved.jobs?.length) { saved.resumeText = ''; saved.resumeName = ''; saved.jobs = []; careerStore.save(session.user, saved); } session.resume = ''; session.resumeName = ''; session.jobs = []; session.seen.clear(); delete session.linkedin; if(url.pathname==='/api/signout'){for(const [id,current] of sessions)if(current===session)sessions.delete(id);res.setHeader('Set-Cookie','sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');} return send(res, 200, { ok: true }); }
