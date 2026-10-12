@@ -1,3 +1,4 @@
+import {searchSiemens} from './siemens-source.js';
 import { isRecentOpen } from './workflow.js';
 
 const decode = value => String(value || '').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n))).replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;|&apos;/g, "'");
@@ -69,7 +70,7 @@ export function bankJob(data, bank, url, canApply = false) {
 }
 export async function searchBanks(preferences, fetcher = fetch) {
   const banks = preferences.banks;
-  if (!Array.isArray(banks) || !banks.length || banks.length > 10 || new Set(banks).size !== banks.length || banks.some(b => !['Barclays', ...Object.keys(workdayBanks)].includes(b))) throw new Error('Choose an available employer source.');
+  if (!Array.isArray(banks) || !banks.length || banks.length > 11 || new Set(banks).size !== banks.length || banks.some(b => !['Barclays','Siemens', ...Object.keys(workdayBanks)].includes(b))) throw new Error('Choose an available employer source.');
   if (!Array.isArray(preferences.locations) || !preferences.locations.length || preferences.locations.length > 30 || preferences.locations.some(p => !p || typeof p.city !== 'string' || !p.city.trim() || typeof p.country !== 'string')) throw new Error('Select preferred cities.');
   if (!Array.isArray(preferences.designations) || !preferences.designations.length || preferences.designations.length > 20 || preferences.designations.some(r => typeof r !== 'string' || !r.trim() || r.length > 100)) throw new Error('Select job designations.');
   const jobs = [], messages = [];
@@ -80,6 +81,7 @@ export async function searchBanks(preferences, fetcher = fetch) {
   };
   if (Number(preferences.limit) === 0) return { jobs, messages: ['Record count is 0; no sources queried.'] };
   const runBank = async bank => {
+    if(bank==='Siemens'){try{const found=await searchSiemens(preferences,fetcher);jobs.push(...found.jobs);messages.push(found.message);}catch(error){messages.push('Siemens: search unavailable ('+error.message+').');}return;}
     if (workdayBanks[bank]) {
       try { const found = await searchWorkday(bank, preferences, fetcher); jobs.push(...found.jobs); messages.push(found.message); }
       catch (error) { messages.push(`${bank}: search unavailable (${error.message}).`); }

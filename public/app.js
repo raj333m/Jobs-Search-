@@ -85,7 +85,7 @@ const geography = {
 };
 const indiaCities = ['Pune', 'Delhi', 'Gurgaon', 'Noida', 'Mumbai', 'Bengaluru', 'Hyderabad', 'Chennai', 'Kolkata', 'Ahmedabad', 'Jaipur', 'Chandigarh'];
 const cityName = value => String(value || '').toLowerCase().replace(/\bgurgaon\b/g, 'gurugram').replace(/\bbangalore\b/g, 'bengaluru').replace(/\bnew delhi\b/g, 'delhi');
-function selectedBanks() { return [['Barclays','barclays'],['Deutsche Bank','deutsche'],['Citi','citi']].filter(([,id]) => $('#bank-'+id)?.checked).map(([bank]) => bank).concat(['PwC','Genpact','FIS','Fiserv','Mastercard','Salesforce','Adobe'].filter(name => $('#employer-'+name.toLowerCase())?.checked)); }
+function selectedBanks() { return [['Barclays','barclays'],['Deutsche Bank','deutsche'],['Citi','citi']].filter(([,id]) => $('#bank-'+id)?.checked).map(([bank]) => bank).concat(['PwC','Genpact','FIS','Fiserv','Mastercard','Salesforce','Adobe','Siemens'].filter(name => $('#employer-'+name.toLowerCase())?.checked)); }
 function hasJobSource() { return demoMode || (state.bankSourcesAvailable && selectedBanks().length > 0) || !!(state.jobSources?.linkedin || state.jobSources?.naukri); }
 function experienceErrors() {
   const errors=[];const raw=$('#total-experience').value;const total=raw.trim()===''?null:Number(raw);
@@ -151,7 +151,7 @@ function render() {
   $('#connect-naukri').disabled = !state.resumeReady;
   if (demoMode) { $('#connect-linkedin').disabled = false; $('#connect-naukri').disabled = false; }
   $('#job-source-status').textContent = state.feedConfigured ? 'A job feed is configured. Submit or Refresh will read its vacancies and match your resume.' : 'LinkedIn and Naukri job data are not connected. Authorised access is required to populate live matching vacancies.';
-  if (state.bankSourcesAvailable) $('#job-source-status').textContent = '10 tested employer sources available. Select one or more employers before Submit.';
+  if (state.bankSourcesAvailable) $('#job-source-status').textContent = '11 tested employer sources available. Select one or more employers before Submit.';
   if (demoMode) $('#job-source-status').textContent = 'Demo vacancies only. LinkedIn and Naukri are not connected.';
   const jobs = filtered(); $('#job-count').textContent = jobs.length;
   $('#match-summary').textContent = `${jobs.length} shown · maximum ${appliedLimit} · ${state.totalMatches ?? state.jobs.length} matching vacancies`;

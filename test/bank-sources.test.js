@@ -52,6 +52,6 @@ test('PwC uses selected city facets, verifies India details and does not classif
   assert.deepEqual(searches[1].appliedFacets.locations,['india-city']);
   assert.equal(result.jobs.length,1);
   assert.deepEqual(result.jobs[0].businessVerticals,['Professional Services','Consulting']);
-  assert.equal(employerSources.length,10);
-  assert.deepEqual(employerSources.filter(s=>s.live).map(s=>s.name),['Barclays','Deutsche Bank','Citi','PwC','Genpact','FIS','Fiserv','Mastercard','Salesforce','Adobe']);
+  assert.equal(employerSources.length,11);
+  assert.deepEqual(employerSources.filter(s=>s.live).map(s=>s.name),['Siemens','Barclays','Deutsche Bank','Citi','PwC','Genpact','FIS','Fiserv','Mastercard','Salesforce','Adobe']);
 });

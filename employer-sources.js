@@ -1,5 +1,6 @@
 // Only sources that passed live vacancy and application-status checks are listed.
 export const employerSources = [
+  {name:"Siemens",id:"employer-siemens",category:"Engineering & technology",url:"https://jobs.siemens.com/en_US/externaljobs/",live:true},
   {
     "name": "Barclays",
     "id": "bank-barclays",

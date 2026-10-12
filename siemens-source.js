@@ -1,0 +1,13 @@
+import {isRecentOpen} from './workflow.js';
+const plain=s=>String(s||'').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/\s+/g,' ').trim();
+export function siemensJob(html,url){
+ if(!/^https:\/\/jobs\.siemens\.com\/en_US\/externaljobs\/JobDetail\/\d+$/.test(url))return null;
+ const fields={};for(const m of html.matchAll(/<div class="article__content__view__field[^>]*>[\s\S]*?<div class="article__content__view__field__label"[^>]*>([\s\S]*?)<\/div>[\s\S]*?<div class="article__content__view__field__value"[^>]*>([\s\S]*?)<\/div>/g))fields[plain(m[1])]=plain(m[2]);
+ if(!/\bIndia\b/.test(fields['Location(s)']||''))return null;
+ const date=fields['Posted since']?.match(/^(\d{2})-([A-Za-z]{3})-(\d{4})$/),month=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(date?.[2]);if(!date||month<0)return null;
+ const id=fields['Job ID'];if(!id||!html.includes('ApplicationMethods?folderId='+id))return null;
+ const description=plain(html.match(/id="section1__content"[^>]*>([\s\S]*?)<\/article>/)?.[1]);const headings=[...html.matchAll(/<h[123][^>]*>([\s\S]*?)<\/h[123]>/g)].map(m=>plain(m[1])).filter(t=>t&&t!=='Job details');const title=headings[0];if(!title||description.length<40)return null;
+ return {id,title,company:fields.Company||'Siemens',source:'Siemens official careers marketplace',location:fields['Location(s)'],country:'India',posted:date[3]+'-'+String(month+1).padStart(2,'0')+'-'+date[1],description,applyLink:url,applicationOpen:true,workMode:fields['Work mode']||'',businessVerticals:['Technology','Manufacturing']};
+}
+export async function searchSiemens(preferences,fetcher=fetch){const get=async url=>{const r=await fetcher(url,{signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('HTTP '+r.status);const t=await r.text();if(t.length>5000000)throw Error('Response too large');return t;};const urls=new Set();for(const role of preferences.designations.slice(0,2)){const u=new URL('https://jobs.siemens.com/en_US/externaljobs/SearchJobs/');u.searchParams.set('search',role);u.searchParams.set('folderRecordsPerPage','20');const html=await get(u.href);for(const m of html.matchAll(/href="(https:\/\/jobs\.siemens\.com\/en_US\/externaljobs\/JobDetail\/(\d+))"/g))urls.add(m[1]);}const jobs=[];let failures=0;const queue=[...urls].slice(0,30);for(let i=0;i<queue.length;i+=3)await Promise.all(queue.slice(i,i+3).map(async url=>{try{const job=siemensJob(await get(url),url);if(job&&isRecentOpen(job,preferences.today))jobs.push(job);}catch{failures++;}}));return {jobs,message:'Siemens: checked '+queue.length+' listings; '+jobs.length+' recent India vacancies with an Apply entry point; '+failures+' retrieval failures.'};}
+
